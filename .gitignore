@@ -1,0 +1,11 @@
+# 个人账本数据与自动备份（绝不提交到公开仓库）
+data/
+
+# Node / 日志
+node_modules/
+*.log
+
+# 系统文件
+.DS_Store
+Icon?
+.claude/

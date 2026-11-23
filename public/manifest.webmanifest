@@ -1,0 +1,16 @@
+{
+  "name": "个人收入分析",
+  "short_name": "收入分析",
+  "description": "Apple 风格个人收入记录与对比分析工作台",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F5F5F7",
+  "theme_color": "#F5F5F7",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    }
+  ]
+}

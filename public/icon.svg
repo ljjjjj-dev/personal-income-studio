@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2D313B"/>
+      <stop offset="50%" stop-color="#1A1D24"/>
+      <stop offset="100%" stop-color="#0F1116"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="76%" cy="22%" r="62%">
+      <stop offset="0%" stop-color="#5AC8FA" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="area" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4CC9F0" stop-opacity="0.38"/>
+      <stop offset="100%" stop-color="#0A84FF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="url(#bg)"/>
+  <rect width="128" height="128" rx="30" fill="url(#glow)"/>
+  <path d="M 18 82 C 34 81, 41 72, 52 68 C 64 64, 72 68, 84 57 C 96 46, 102 41, 110 33 L 110 92 L 18 92 Z" fill="url(#area)"/>
+  <path d="M 18 82 C 34 81, 41 72, 52 68 C 64 64, 72 68, 84 57 C 96 46, 102 41, 110 33" fill="none" stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round"/>
+  <circle cx="110" cy="33" r="9.5" fill="#5AC8FA" fill-opacity="0.3"/>
+  <circle cx="110" cy="33" r="4.8" fill="#FFFFFF"/>
+  <circle cx="110" cy="33" r="2.2" fill="#0A84FF"/>
+  <rect x="16" y="97" width="96" height="16" rx="6" fill="#FFFFFF" fill-opacity="0.08"/>
+  <rect x="22" y="103" width="64" height="4.5" rx="2.25" fill="url(#bar)"/>
+  <rect x="1" y="1" width="126" height="126" rx="29" fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="1.5"/>
+</svg>
