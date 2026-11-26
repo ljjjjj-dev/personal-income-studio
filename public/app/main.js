@@ -11,9 +11,11 @@ import {
   renderDonutSvg,
   renderGoalRingSvg,
   renderItemCompareBarSvg,
+  renderMiniSparklineSvg,
   renderMultiYearLineSvg,
   renderRegularBaselineSvg,
   renderStackedTrendSvg,
+  renderVisualPulseHtml,
   renderYoYAttributionSvg,
 } from './charts.js';
 import { exportToCsv, exportToExcel, exportToJson, importFromFile, loadStoreData, saveStoreData } from './io.js';
@@ -55,17 +57,25 @@ const state = {
   selectedCategoryId: 'salary',
   annualAttribYear: 2026,
   annualTableTab: 'items', // items | indicators | cash_fund
+  showFutureYears: false,
   ledgerYear: 2026, // number or 'all'
-  ledgerViewMode: 'full', // full | summary
+  ledgerViewMode: typeof window !== 'undefined' && window.innerWidth <= 1024 ? 'summary' : 'full', // full | summary
   ledgerSearch: '',
+  isComposingSearch: false,
   privacy: false,
   dark: false,
   editingGoal: false,
   editingRecordId: null,
   draftValues: {},
   draftNote: '',
+  draftDirty: false,
+  confirmClearDraft: false,
+  draftWarning: '',
+  draftNegConfirmed: false,
   showCatModal: false,
   newCatColor: APPLE_PALETTE[0],
+  confirmDelCatId: null,
+  catFormError: '',
   showDataMenu: false,
   toast: null,
 };
@@ -112,7 +122,24 @@ function openMonthEditor(recordId, analytics) {
   }
   state.draftValues = vMap;
   state.draftNote = target.record.note || '';
+  state.draftDirty = false;
+  state.confirmClearDraft = false;
+  state.draftWarning = '';
+  state.draftNegConfirmed = false;
   render();
+}
+
+function tryCloseDrawer() {
+  if (state.draftDirty && !window.confirm('当前月份有未保存的修改，确定放弃吗？')) {
+    return false;
+  }
+  state.editingRecordId = null;
+  state.draftDirty = false;
+  state.confirmClearDraft = false;
+  state.draftWarning = '';
+  state.draftNegConfirmed = false;
+  render();
+  return true;
 }
 
 // =========================================================================
@@ -210,26 +237,38 @@ function renderOverview(analytics) {
         </div>
       </div>
 
-      <!-- Hairline 4-Cell Sub-Metrics Strip -->
+      <!-- Hairline 4-Cell Sub-Metrics Strip with Micro Visuals -->
       <div class="metrics-strip">
         <div class="metric-cell">
           <div class="metric-label">${state.heroScope === 'year' ? `全部累计（${analytics.totalRecordedCount}个月）` : `${ly}年累计（${ls?.recordedMonths || 0}个月）`}</div>
           <div class="metric-value">${moneyHtml(state.heroScope === 'year' ? cumVal : lyVal, p)}</div>
+          <div class="metric-visual">
+            <div class="glass-track glass-track-xs"><div class="glass-fill" style="width:${Math.min(100, Math.round(progPct))}%;background:#4A90E2"></div></div>
+          </div>
           <div class="metric-note">${state.heroScope === 'year' ? `占累计 ${calLabel}` : `比上年同期${ls?.samePeriodDiff >= 0 ? '多' : '少'} ¥${fmtCompact(Math.abs(ls?.samePeriodDiff || 0), p)}`}</div>
         </div>
         <div class="metric-cell">
           <div class="metric-label">月均${calLabel}</div>
           <div class="metric-value">${moneyHtml(avgVal, p)}</div>
+          <div class="metric-visual">
+            ${renderMiniSparklineSvg(analytics.recordedMonths.slice(-12).map((m) => (state.caliber === 'cash' ? m.cashTotal : state.caliber === 'fund' ? m.fundTotal : m.total)), '#4A90E2')}
+          </div>
           <div class="metric-note">平时月均 ¥${fmtCompact(regularAvgVal, p)}（不含一次性）</div>
         </div>
         <div class="metric-cell">
           <div class="metric-label">累计实际到手现金</div>
           <div class="metric-value">${moneyHtml(analytics.cumulativeCash, p)}</div>
+          <div class="metric-visual">
+            <div class="glass-track glass-track-xs"><div class="glass-fill" style="width:${(analytics.cashRatio * 100).toFixed(1)}%;background:#52C498"></div></div>
+          </div>
           <div class="metric-note">占总收入 ${fmtPct(analytics.cashRatio)} · 月均 ¥${fmtCompact(analytics.overallCashAvg, p)}</div>
         </div>
         <div class="metric-cell">
           <div class="metric-label">累计公积金入账</div>
           <div class="metric-value">${moneyHtml(analytics.cumulativeFund, p)}</div>
+          <div class="metric-visual">
+            <div class="glass-track glass-track-xs"><div class="glass-fill" style="width:${(analytics.fundRatio * 100).toFixed(1)}%;background:#4ECDC4"></div></div>
+          </div>
           <div class="metric-note">占总收入 ${fmtPct(analytics.fundRatio)} · 含结息 ¥${fmtCompact(analytics.cumulativeFundInterest, p)}</div>
         </div>
       </div>
@@ -245,18 +284,18 @@ function renderOverview(analytics) {
         <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
           ${state.trendStudioTab === 'cumulative' ? `
             <div class="legend-row">
-              <span class="legend-item"><span class="legend-line" style="background:#007AFF"></span>累计总收入</span>
-              <span class="legend-item"><span class="legend-line" style="background:#34C759"></span>累计到手现金</span>
-              <span class="legend-item"><span class="legend-line" style="background:#00C7BE"></span>累计公积金</span>
+              <span class="legend-item"><span class="legend-line" style="background:#4A90E2"></span>累计总收入</span>
+              <span class="legend-item"><span class="legend-line" style="background:#52C498"></span>累计到手现金</span>
+              <span class="legend-item"><span class="legend-line" style="background:#4ECDC4"></span>累计公积金</span>
             </div>
           ` : state.trendStudioTab === 'stacked_cash' ? `
             <div class="legend-row">
-              <span class="legend-item"><span class="legend-swatch" style="background:#34C759"></span>实际到手</span>
-              <span class="legend-item"><span class="legend-swatch" style="background:#00C7BE"></span>公积金</span>
+              <span class="legend-item"><span class="legend-swatch" style="background:#52C498"></span>实际到手</span>
+              <span class="legend-item"><span class="legend-swatch" style="background:#4ECDC4"></span>公积金</span>
             </div>
           ` : `
             <div class="legend-row">
-              <span class="legend-item"><span class="legend-swatch" style="background:#007AFF"></span>平时常规</span>
+              <span class="legend-item"><span class="legend-swatch" style="background:#4A90E2"></span>平时常规</span>
               <span class="legend-item"><span class="legend-swatch" style="background:${ONETIME_GROUP_COLOR}"></span>一次性款项</span>
             </div>
           `}
@@ -294,20 +333,13 @@ function renderOverview(analytics) {
       </div>
 
       <div class="card col-5">
-        <div class="card-header" style="margin-bottom:12px">
+        <div class="card-header" style="margin-bottom:14px">
           <div>
-            <div class="card-title">一句话读懂你的收入</div>
-            <div class="card-sub">随明细更新实时重算</div>
+            <div class="card-title">收入脉搏 · 视觉速览</div>
+            <div class="card-sub">以比例条与标尺直观呈现核心结构</div>
           </div>
         </div>
-        <div class="editorial-list">
-          ${analytics.insights.map((line, i) => `
-            <div class="editorial-row">
-              <span class="editorial-index">${i + 1}</span>
-              <span>${esc(maskInsightLine(line, p))}</span>
-            </div>
-          `).join('')}
-        </div>
+        ${renderVisualPulseHtml(analytics, p)}
       </div>
     </section>
 
@@ -373,18 +405,26 @@ function renderMonthly(analytics) {
   const sameDiff = round2(sameCurr - samePrev);
   const sameYoY = samePrev > 0 ? sameDiff / samePrev : null;
   const bs = analytics.regularBaselineStats;
+  const activeHeatYears = analytics.years.filter((y) => (analytics.yearMap[y]?.recordedMonths || 0) > 0);
+  const hasFutureEmpty = analytics.years.length > activeHeatYears.length;
+  const displayYears = state.showFutureYears || activeHeatYears.length === 0 ? analytics.years : activeHeatYears;
 
   return `
     <!-- Card 1: 12xN Heatmap Matrix -->
     <section class="card">
       <div class="card-header">
         <div>
-          <div class="card-title">月度收入热力矩阵（12个月 × 多年份）</div>
+          <div class="card-title">月度收入热力矩阵（12个月 × ${displayYears.length}年份）</div>
           <div class="card-sub">蓝点代表含备注说明 · 点击任意月份格子即可直达编辑</div>
         </div>
-        <div class="segmented">
-          <button class="${mode === 'all' ? 'active' : ''}" data-mmode="all">含一次性款项</button>
-          <button class="${mode === 'regular' ? 'active' : ''}" data-mmode="regular">平时常规收入</button>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${hasFutureEmpty ? `
+            <button class="pill-btn" data-action="toggle-future-years">${state.showFutureYears ? '收起空白年份' : '显示规划年份'}</button>
+          ` : ''}
+          <div class="segmented">
+            <button class="${mode === 'all' ? 'active' : ''}" data-mmode="all">含一次性款项</button>
+            <button class="${mode === 'regular' ? 'active' : ''}" data-mmode="regular">平时常规收入</button>
+          </div>
         </div>
       </div>
       <div class="table-wrap">
@@ -392,7 +432,7 @@ function renderMonthly(analytics) {
           <thead>
             <tr>
               <th style="width:58px">月份</th>
-              ${analytics.years.map((y) => `<th style="min-width:94px;color:var(--text);font-weight:600">${y}年</th>`).join('')}
+              ${displayYears.map((y) => `<th style="min-width:94px;color:var(--text);font-weight:600">${y}年</th>`).join('')}
             </tr>
           </thead>
           <tbody>
@@ -400,7 +440,7 @@ function renderMonthly(analytics) {
               const m = idx + 1;
               return `<tr>
                 <td style="font-weight:500;color:var(--text-secondary)">${m}月</td>
-                ${analytics.years.map((y) => {
+                ${displayYears.map((y) => {
                   const f = analytics.yearMap[y]?.months.find((x) => x.record.month === m);
                   const v = f?.hasData ? (mode === 'all' ? f.total : f.regularTotal) : null;
                   return `<td>
@@ -414,7 +454,7 @@ function renderMonthly(analytics) {
             }).join('')}
             <tr>
               <td style="font-weight:600;padding-top:10px">年度合计</td>
-              ${analytics.years.map((y) => {
+              ${displayYears.map((y) => {
                 const s = analytics.yearMap[y];
                 const v = mode === 'all' ? s?.total : s?.regularTotal;
                 return `<td style="font-weight:600;padding-top:10px">${s?.recordedMonths ? fmtMoney(v, { privacy: p }) : '—'}</td>`;
@@ -422,7 +462,7 @@ function renderMonthly(analytics) {
             </tr>
             <tr>
               <td style="color:var(--text-tertiary)">月均水平</td>
-              ${analytics.years.map((y) => {
+              ${displayYears.map((y) => {
                 const s = analytics.yearMap[y];
                 const v = mode === 'all' ? s?.monthlyAvg : s?.regularMonthlyAvg;
                 return `<td style="color:var(--text-secondary)">${v != null ? fmtMoney(v, { privacy: p }) : '—'}</td>`;
@@ -542,8 +582,12 @@ function renderStructure(analytics) {
     comp.sort((a, b) => b.value - a.value);
   }
 
+  // 收入结构页不单独展开这 5 项一次性明细（已在环图与堆叠图中合并为「一次性款项」）
+  const STRUCTURE_HIDDEN_IDS = new Set(['leave_pay', 'fund_interest', 'salary_adj', 'bonus_once', 'bonus_eval']);
+  const visibleCats = analytics.categories.filter((c) => !STRUCTURE_HIDDEN_IDS.has(c.id));
+
   // Single-category 24m explorer stats
-  const selCat = analytics.categories.find((c) => c.id === state.selectedCategoryId) || analytics.categories[0];
+  const selCat = visibleCats.find((c) => c.id === state.selectedCategoryId) || visibleCats[0] || analytics.categories[0];
   const catVals24 = analytics.recent24Months
     .filter((m) => m.hasData)
     .map((m) => {
@@ -588,8 +632,8 @@ function renderStructure(analytics) {
                   <span style="display:flex;align-items:center;gap:7px;font-weight:500"><span style="width:8px;height:8px;border-radius:99px;background:${c.color};flex-shrink:0"></span>${esc(c.name)}</span>
                   <span class="tabular" style="color:var(--text-tertiary)">${fmtMoney(c.value, { prefix: '¥', privacy: p })} · <strong style="color:var(--text)">${fmtPct(c.pct)}</strong></span>
                 </div>
-                <div style="height:5px;border-radius:99px;background:var(--seg-bg);overflow:hidden">
-                  <div style="height:100%;width:${(c.pct * 100).toFixed(1)}%;background:${c.color};border-radius:99px"></div>
+                <div class="glass-track glass-track-sm">
+                  <div class="glass-fill" style="width:${(c.pct * 100).toFixed(1)}%;background:${c.color}"></div>
                 </div>
               </div>
             `).join('')}
@@ -612,15 +656,15 @@ function renderStructure(analytics) {
     <section class="card">
       <div class="card-header">
         <div>
-          <div class="card-title">${selY}年 vs ${prevY}年 · 各项收入对比</div>
-          <div class="card-sub">按 ${selY}年金额由高到低横向对照，直观识别主要增量与减量科目</div>
+          <div class="card-title">${selY}年 vs ${prevY}年 · 常规主力科目对比</div>
+          <div class="card-sub">按 ${selY}年金额由高到低横向对照（一次性子目已合并在上方环图「一次性款项」中）</div>
         </div>
         <div class="legend-row">
-          <span class="legend-item"><span class="legend-swatch" style="background:#007AFF"></span>${selY}年</span>
-          <span class="legend-item"><span class="legend-swatch" style="background:rgba(142,142,147,0.28)"></span>${prevY}年</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#4A90E2"></span>${selY}年</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:rgba(148,163,184,0.34)"></span>${prevY}年</span>
         </div>
       </div>
-      ${renderItemCompareBarSvg(analytics.categories, currS, prevS, selY, prevY, p)}
+      ${renderItemCompareBarSvg(visibleCats, currS, prevS, selY, prevY, p)}
     </section>
 
     <!-- Row 3: Apple Health Style Single-Category 24-Month Trend Explorer -->
@@ -637,7 +681,7 @@ function renderStructure(analytics) {
         </div>
       </div>
       <div class="chip-row">
-        ${analytics.categories.map((cat) => `<button class="chip ${cat.id === selCat.id ? 'active' : ''}" data-cat-chip="${cat.id}">${esc(cat.name)}</button>`).join('')}
+        ${visibleCats.map((cat) => `<button class="chip ${cat.id === selCat.id ? 'active' : ''}" data-cat-chip="${cat.id}">${esc(cat.name)}</button>`).join('')}
       </div>
       ${renderCategoryTrendSvg(analytics.recent24Months, selCat, p)}
     </section>
@@ -654,7 +698,7 @@ function renderStructure(analytics) {
         <table>
           <thead><tr><th>收入科目</th><th style="text-align:left">归类</th><th>${selY}年</th><th>${prevY}年</th><th>增减</th><th>同比</th><th>占本年</th></tr></thead>
           <tbody>
-            ${analytics.categories.map((cat) => {
+            ${visibleCats.map((cat) => {
               const cv = currS?.itemTotals[cat.id] || 0;
               const pv = prevS?.itemTotals[cat.id] || 0;
               const diff = round2(cv - pv);
@@ -698,10 +742,13 @@ function renderStructure(analytics) {
 // =========================================================================
 function renderAnnual(analytics) {
   const p = state.privacy;
-  const years = analytics.years;
-  const balanced = years.every((y) => analytics.yearMap[y]?.sumMatchesMonthly && analytics.yearMap[y]?.cashPlusFundMatchesTotal);
+  const allYears = analytics.years;
+  const activeYears = allYears.filter((y) => (analytics.yearMap[y]?.recordedMonths || 0) > 0);
+  const hasFutureEmpty = allYears.length > activeYears.length;
+  const years = state.showFutureYears || activeYears.length === 0 ? allYears : activeYears;
+  const balanced = allYears.every((y) => analytics.yearMap[y]?.sumMatchesMonthly && analytics.yearMap[y]?.cashPlusFundMatchesTotal);
 
-  const comparableYears = years.filter((y) => (analytics.yearMap[y]?.samePeriodItemDiffs?.length || 0) > 0);
+  const comparableYears = allYears.filter((y) => (analytics.yearMap[y]?.samePeriodItemDiffs?.length || 0) > 0);
   const attribY = comparableYears.includes(state.annualAttribYear) ? state.annualAttribYear : (comparableYears[comparableYears.length - 1] || analytics.latestYear);
   const attribSummary = analytics.yearMap[attribY];
   const attribMonthsCount = attribSummary?.samePeriodMonths?.length || 0;
@@ -737,8 +784,8 @@ function renderAnnual(analytics) {
             <div class="card-sub">清晰对比可支配现金流与公积金累计占比</div>
           </div>
           <div class="legend-row">
-            <span class="legend-item"><span class="legend-swatch" style="background:#34C759"></span>现金</span>
-            <span class="legend-item"><span class="legend-swatch" style="background:#00C7BE"></span>公积金</span>
+            <span class="legend-item"><span class="legend-swatch" style="background:#52C498"></span>现金</span>
+            <span class="legend-item"><span class="legend-swatch" style="background:#4ECDC4"></span>公积金</span>
           </div>
         </div>
         ${renderAnnualCashFundSvg(analytics, p)}
@@ -771,10 +818,15 @@ function renderAnnual(analytics) {
           <div class="card-title">年度明细报表</div>
           <div class="card-sub">完整保留原表三张核心年度核对表</div>
         </div>
-        <div class="segmented">
-          <button class="${state.annualTableTab === 'items' ? 'active' : ''}" data-atab="items">① 各项收入汇总</button>
-          <button class="${state.annualTableTab === 'indicators' ? 'active' : ''}" data-atab="indicators">② 关键指标与同期同比</button>
-          <button class="${state.annualTableTab === 'cash_fund' ? 'active' : ''}" data-atab="cash_fund">③ 实际到手 vs 公积金</button>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${hasFutureEmpty ? `
+            <button class="pill-btn" data-action="toggle-future-years">${state.showFutureYears ? '收起空白年份' : '显示规划年份'}</button>
+          ` : ''}
+          <div class="segmented">
+            <button class="${state.annualTableTab === 'items' ? 'active' : ''}" data-atab="items">① 各项收入汇总</button>
+            <button class="${state.annualTableTab === 'indicators' ? 'active' : ''}" data-atab="indicators">② 关键指标与同期同比</button>
+            <button class="${state.annualTableTab === 'cash_fund' ? 'active' : ''}" data-atab="cash_fund">③ 实际到手 vs 公积金</button>
+          </div>
         </div>
       </div>
 
@@ -899,18 +951,40 @@ function renderLedger(analytics) {
         </div>
       ` : ''}
       <div class="table-wrap ${isFull ? 'table-compact' : ''}">
-        <table>
+        <table class="ledger-table ${isFull ? 'ledger-table-full' : 'ledger-table-summary'}">
+          <colgroup>
+            ${isFull ? `
+              <col style="width:152px" />
+              ${analytics.regularCategories.map(() => `<col style="width:96px" />`).join('')}
+              <col style="width:96px" />
+              ${analytics.onetimeCategories.map(() => `<col style="width:96px" />`).join('')}
+              <col style="width:96px" />
+              <col style="width:96px" />
+              <col style="width:96px" />
+              <col style="width:200px" />
+              <col style="width:68px" />
+            ` : `
+              <col style="width:152px" />
+              <col style="width:112px" />
+              <col style="width:112px" />
+              <col style="width:112px" />
+              <col style="width:112px" />
+              <col style="width:112px" />
+              <col style="width:auto" />
+              <col style="width:68px" />
+            `}
+          </colgroup>
           <thead>
             ${isFull ? `
               <tr>
-                <th class="sticky-left" style="padding-left:22px;min-width:116px">月份</th>
+                <th class="sticky-left" style="padding-left:22px">月份</th>
                 ${analytics.regularCategories.map((c) => `<th>${esc(c.name)}</th>`).join('')}
                 <th style="font-weight:600;color:var(--text)">常规小计</th>
                 ${analytics.onetimeCategories.map((c) => `<th style="color:${ONETIME_GROUP_COLOR}">${esc(c.name)}</th>`).join('')}
                 <th style="font-weight:600;color:${ONETIME_GROUP_COLOR}">一次性小计</th>
                 <th style="font-weight:600;color:var(--text)">月度合计</th>
                 <th style="color:var(--green)">实际到手</th>
-                <th style="text-align:left">备注</th>
+                <th style="text-align:left;padding-left:14px">备注</th>
                 <th class="sticky-right" style="padding-right:22px">操作</th>
               </tr>
             ` : `
@@ -921,7 +995,7 @@ function renderLedger(analytics) {
                 <th style="color:var(--teal)">公积金</th>
                 <th>常规小计</th>
                 <th style="color:${ONETIME_GROUP_COLOR}">一次性小计</th>
-                <th style="text-align:left">备注</th>
+                <th style="text-align:left;padding-left:14px">备注</th>
                 <th class="sticky-right" style="padding-right:22px">操作</th>
               </tr>
             `}
@@ -954,8 +1028,8 @@ function renderLedger(analytics) {
                   <td style="font-weight:600;color:${m.hasData && m.onetimeTotal !== 0 ? ONETIME_GROUP_COLOR : 'var(--text-muted)'}">${m.hasData && m.onetimeTotal !== 0 ? fmtMoney(m.onetimeTotal, { privacy: p }) : '—'}</td>
                   <td style="font-weight:600;color:var(--text)">${m.hasData ? fmtMoney(m.total, { privacy: p }) : '—'}</td>
                   <td style="color:var(--green);font-weight:500">${m.hasData ? fmtMoney(m.cashTotal, { privacy: p }) : '—'}</td>
-                  <td class="note-cell-wrap" style="color:var(--text-secondary);min-width:220px">${esc(m.record.note || '')}</td>
-                  <td class="sticky-right" style="padding-right:22px;color:var(--blue);font-weight:500">编辑</td>
+                  <td class="note-cell-uniform" title="${esc(m.record.note || '')}">${esc(m.record.note || '')}</td>
+                  <td class="sticky-right" style="padding-right:18px"><button type="button" class="row-edit-btn" data-edit="${m.record.id}">编辑</button></td>
                 </tr>`;
               }
 
@@ -966,8 +1040,8 @@ function renderLedger(analytics) {
                 <td style="color:var(--teal)">${m.hasData ? fmtMoney(m.fundTotal, { privacy: p }) : '—'}</td>
                 <td style="color:var(--text-secondary)">${m.hasData ? fmtMoney(m.regularTotal, { privacy: p }) : '—'}</td>
                 <td style="color:${m.hasData && m.onetimeTotal !== 0 ? ONETIME_GROUP_COLOR : 'var(--text-muted)'}">${m.hasData && m.onetimeTotal !== 0 ? fmtMoney(m.onetimeTotal, { privacy: p }) : '—'}</td>
-                <td class="note-cell-wrap" style="color:var(--text-secondary)">${esc(m.record.note || '')}</td>
-                <td class="sticky-right" style="padding-right:22px;color:var(--blue);font-weight:500">编辑</td>
+                <td class="note-cell-uniform" title="${esc(m.record.note || '')}">${esc(m.record.note || '')}</td>
+                <td class="sticky-right" style="padding-right:18px"><button type="button" class="row-edit-btn" data-edit="${m.record.id}">编辑</button></td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -1006,13 +1080,16 @@ function renderDrawer(analytics) {
 
   return `
     <div class="overlay" data-overlay="drawer">
-      <div class="drawer" onclick="event.stopPropagation()">
+      <div class="drawer" role="dialog" aria-modal="true" aria-label="编辑工资明细" onclick="event.stopPropagation()">
         <div class="sheet-header">
           <div>
-            <div style="font-size:17px;font-weight:600">${m.record.isHistorical ? `${m.record.year}年 历史记录` : `${m.record.year}年 ${m.record.month}月 工资明细`}</div>
-            <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px">保存后所有看板与本地 JSON 文件立即同步</div>
+            <div style="font-size:17px;font-weight:600">
+              ${m.record.isHistorical ? `${m.record.year}年 历史记录` : `${m.record.year}年 ${m.record.month}月 工资明细`}
+              ${state.draftDirty ? `<span class="badge" style="background:var(--amber-soft);color:var(--amber);margin-left:6px;font-size:10.5px">未保存</span>` : ''}
+            </div>
+            <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px">保存后所有看板与本地 JSON 文件立即同步 · 快捷键 Cmd/Ctrl+S 保存，Esc 退出</div>
           </div>
-          <button class="icon-btn" data-action="close-drawer">✕</button>
+          <button class="icon-btn" data-action="close-drawer" aria-label="关闭抽屉">✕</button>
         </div>
 
         <div style="padding:14px 24px;background:var(--card-subtle);border-bottom:0.5px solid var(--hairline);display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px" class="tabular">
@@ -1058,13 +1135,14 @@ function renderDrawer(analytics) {
 
           <div style="font-size:12.5px;font-weight:600;color:var(--text-secondary);margin-bottom:6px">当月备注</div>
           <textarea id="draft-note" rows="3" class="apple-textarea" style="width:100%;resize:none" placeholder="例如：年终奖发放、补发或扣款说明...">${esc(state.draftNote)}</textarea>
+          ${state.draftWarning ? `<div class="inline-warn">${esc(state.draftWarning)}</div>` : ''}
         </div>
 
         <div class="sheet-footer">
-          <button class="pill-btn" data-action="clear-draft" style="color:var(--red)">清空本月</button>
+          <button class="pill-btn ${state.confirmClearDraft ? 'btn-danger-confirm' : ''}" data-action="clear-draft" style="${state.confirmClearDraft ? '' : 'color:var(--red)'}">${state.confirmClearDraft ? '再次点击确认清空' : '清空本月'}</button>
           <div style="display:flex;gap:8px">
             <button class="pill-btn" data-action="close-drawer">取消</button>
-            <button class="pill-btn primary" data-action="save-draft">保存明细</button>
+            <button class="pill-btn primary" data-action="save-draft">${state.draftNegConfirmed ? '确认保存含负值' : '保存明细'}</button>
           </div>
         </div>
       </div>
@@ -1076,15 +1154,15 @@ function renderCatModal(analytics) {
   if (!state.showCatModal) return '';
   return `
     <div class="overlay center" data-overlay="cat">
-      <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal" role="dialog" aria-modal="true" aria-label="自定义收入科目管理" onclick="event.stopPropagation()">
         <div class="sheet-header">
           <div>
             <div style="font-size:17px;font-weight:600">自定义收入科目管理</div>
             <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px">新增补贴、奖金或扣款项后，所有报表与录入表单自动同步</div>
           </div>
-          <button class="icon-btn" data-action="close-cat">✕</button>
+          <button class="icon-btn" data-action="close-cat" aria-label="关闭科目弹窗">✕</button>
         </div>
-        <div style="padding:16px 24px;background:var(--card-subtle);border-bottom:0.5px solid var(--hairline)">
+        <div style="padding:16px 24px;background:var(--card-subtle);border-bottom:1px solid var(--hairline)">
           <div style="display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:8px;margin-bottom:10px">
             <input id="new-cat-name" class="apple-input" placeholder="新科目名（如：餐补）" />
             <select id="new-cat-group" class="apple-select"><option value="regular">常规月度项目</option><option value="onetime">一次性款项</option></select>
@@ -1092,21 +1170,22 @@ function renderCatModal(analytics) {
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
             <div style="display:flex;gap:6px;flex-wrap:wrap">
-              ${APPLE_PALETTE.map((c) => `<button data-pick-color="${c}" style="width:20px;height:20px;border-radius:99px;background:${c};${state.newCatColor === c ? 'outline:2px solid var(--blue);outline-offset:2px' : 'opacity:0.75'}"></button>`).join('')}
+              ${APPLE_PALETTE.map((c) => `<button data-pick-color="${c}" aria-label="选择颜色 ${c}" style="width:20px;height:20px;border-radius:99px;background:${c};${state.newCatColor === c ? 'outline:2px solid var(--blue);outline-offset:2px' : 'opacity:0.75'}"></button>`).join('')}
             </div>
             <button class="pill-btn primary" data-action="add-cat">+ 添加科目</button>
           </div>
+          ${state.catFormError ? `<div class="inline-err">${esc(state.catFormError)}</div>` : ''}
         </div>
         <div class="sheet-body" style="display:flex;flex-direction:column;gap:8px">
           ${analytics.categories.map((c) => `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:12px;border:0.5px solid var(--hairline)">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:12px;border:1px solid var(--hairline)">
               <div style="display:flex;align-items:center;gap:8px">
                 <span class="kpi-dot" style="background:${c.color};margin:0"></span>
                 <span style="font-weight:500;font-size:13.5px">${esc(c.name)}</span>
                 <span class="badge badge-neutral">${c.group === 'regular' ? '常规' : '一次性'}</span>
                 <span class="badge ${c.bucket === 'fund' ? 'badge-neutral' : 'badge-up'}">${c.bucket === 'fund' ? '公积金' : '现金'}</span>
               </div>
-              ${c.builtIn ? `<span style="font-size:11.5px;color:var(--text-tertiary)">内置</span>` : `<button data-del-cat="${c.id}" style="color:var(--red);font-size:12px;font-weight:500">删除</button>`}
+              ${c.builtIn ? `<span style="font-size:11.5px;color:var(--text-tertiary)">内置</span>` : `<button data-del-cat="${c.id}" class="${state.confirmDelCatId === c.id ? 'pill-btn btn-danger-confirm' : ''}" style="${state.confirmDelCatId === c.id ? 'padding:3px 9px;font-size:11.5px' : 'color:var(--red);font-size:12px;font-weight:500'}">${state.confirmDelCatId === c.id ? '确认删除' : '删除'}</button>`}
             </div>
           `).join('')}
         </div>
@@ -1157,6 +1236,7 @@ function render() {
         <header class="topbar">
           <div class="topbar-inner">
             <div class="page-title-group">
+              <span class="mobile-sync-dot" title="${state.saveMode === 'saved' ? '已同步至本地 JSON' : '本地缓存'}"></span>
               <div class="page-title">${activeNav.label}</div>
               <div class="page-sub">更新至 ${analytics.latestRecordedMonth ? `${analytics.latestRecordedMonth.record.year}年${analytics.latestRecordedMonth.record.month}月` : '暂无'} · ${analytics.totalRecordedCount} 个月</div>
             </div>
@@ -1185,7 +1265,7 @@ function render() {
                 ` : ''}
                 <input id="file-import-input" type="file" accept=".csv,.json" style="display:none" />
               </div>
-              <button class="icon-btn" data-action="toggle-dark" title="切换浅色/深色模式">${state.dark ? ICONS.sun : ICONS.moon}</button>
+              <button class="icon-btn" data-action="toggle-dark" title="切换浅色/深色模式" aria-label="切换浅色或深色模式">${state.dark ? ICONS.sun : ICONS.moon}</button>
             </div>
           </div>
           <div class="mobile-nav">
@@ -1275,8 +1355,17 @@ function bindEvents(root, analytics) {
   if (aSel) aSel.addEventListener('change', (e) => { state.annualAttribYear = Number(e.target.value); render(); });
   const lSearch = root.querySelector('#ledger-search');
   if (lSearch) {
+    lSearch.addEventListener('compositionstart', () => { state.isComposingSearch = true; });
+    lSearch.addEventListener('compositionend', (e) => {
+      state.isComposingSearch = false;
+      state.ledgerSearch = e.target.value;
+      render();
+      const el = document.getElementById('ledger-search');
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    });
     lSearch.addEventListener('input', (e) => {
       state.ledgerSearch = e.target.value;
+      if (state.isComposingSearch || e.isComposing) return;
       render();
       const el = document.getElementById('ledger-search');
       if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
@@ -1284,14 +1373,15 @@ function bindEvents(root, analytics) {
   }
 
   root.querySelectorAll('[data-action]').forEach((el) => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
       const act = el.getAttribute('data-action');
       if (act === 'toggle-privacy') { state.privacy = !state.privacy; render(); }
       else if (act === 'toggle-dark') { state.dark = !state.dark; render(); }
-      else if (act === 'toggle-menu') { state.showDataMenu = !state.showDataMenu; render(); }
-      else if (act === 'open-cat') { state.showCatModal = true; state.showDataMenu = false; render(); }
-      else if (act === 'close-cat') { state.showCatModal = false; render(); }
-      else if (act === 'close-drawer') { state.editingRecordId = null; render(); }
+      else if (act === 'toggle-future-years') { state.showFutureYears = !state.showFutureYears; render(); }
+      else if (act === 'toggle-menu') { e.stopPropagation(); state.showDataMenu = !state.showDataMenu; render(); }
+      else if (act === 'open-cat') { state.showCatModal = true; state.showDataMenu = false; state.catFormError = ''; state.confirmDelCatId = null; render(); }
+      else if (act === 'close-cat') { state.showCatModal = false; state.catFormError = ''; state.confirmDelCatId = null; render(); }
+      else if (act === 'close-drawer') { tryCloseDrawer(); }
       else if (act === 'edit-goal') { state.editingGoal = true; render(); }
       else if (act === 'cancel-goal') { state.editingGoal = false; render(); }
       else if (act === 'save-goal') {
@@ -1321,24 +1411,57 @@ function bindEvents(root, analytics) {
             const v = prev.values?.[cat.id];
             if (v !== null && v !== undefined) state.draftValues[cat.id] = String(v);
           }
+          state.draftDirty = true;
+          state.confirmClearDraft = false;
           showToast(`已沿用 ${prev.year}年${prev.month}月 常规项`);
         }
       }
       else if (act === 'clear-draft') {
+        if (!state.confirmClearDraft) {
+          state.confirmClearDraft = true;
+          render();
+          return;
+        }
         for (const cat of analytics.categories) state.draftValues[cat.id] = '';
         state.draftNote = '';
+        state.draftDirty = true;
+        state.confirmClearDraft = false;
+        state.draftWarning = '';
+        state.draftNegConfirmed = false;
         render();
       }
       else if (act === 'save-draft') {
         const rec = state.store.records.find((r) => r.id === state.editingRecordId);
         if (rec) {
           const values = {};
+          const negNames = [];
           for (const cat of analytics.categories) {
             const raw = (state.draftValues[cat.id] || '').trim();
-            values[cat.id] = raw === '' ? null : round2(Number(raw));
+            if (raw === '') {
+              values[cat.id] = null;
+            } else {
+              const num = Number(raw);
+              if (!Number.isFinite(num)) {
+                state.draftWarning = `「${cat.name}」输入的不是有效数字，请检查后再保存。`;
+                render();
+                return;
+              }
+              if (num < 0) negNames.push(cat.name);
+              values[cat.id] = round2(num);
+            }
+          }
+          if (negNames.length > 0 && !state.draftNegConfirmed) {
+            state.draftNegConfirmed = true;
+            state.draftWarning = `检测到负值金额（${negNames.join('、')}），若确认是扣款项，请再次点击「确认保存含负值」。`;
+            render();
+            return;
           }
           const updated = { ...rec, values, note: (state.draftNote || '').trim() };
           state.editingRecordId = null;
+          state.draftDirty = false;
+          state.confirmClearDraft = false;
+          state.draftWarning = '';
+          state.draftNegConfirmed = false;
           persist({ ...state.store, records: state.store.records.map((r) => (r.id === updated.id ? updated : r)) }, `已保存 ${updated.year}年${updated.month ? `${updated.month}月` : '历史'}明细`);
         }
       }
@@ -1346,7 +1469,13 @@ function bindEvents(root, analytics) {
         const name = (document.getElementById('new-cat-name')?.value || '').trim();
         const group = document.getElementById('new-cat-group')?.value || 'regular';
         const bucket = document.getElementById('new-cat-bucket')?.value || 'cash';
-        if (!name) return;
+        if (!name) {
+          state.catFormError = '请输入新科目名称（例如：餐补、季度奖）后再添加。';
+          render();
+          document.getElementById('new-cat-name')?.focus();
+          return;
+        }
+        state.catFormError = '';
         const maxOrder = state.store.categories.reduce((m, c) => Math.max(m, c.order), 0);
         const cat = { id: `custom_${Date.now()}`, name, group, bucket, color: state.newCatColor, order: maxOrder + 1, builtIn: false };
         persist({ ...state.store, categories: [...state.store.categories, cat] }, `已新增科目「${name}」`);
@@ -1362,6 +1491,10 @@ function bindEvents(root, analytics) {
   root.querySelectorAll('[data-cat-input]').forEach((inp) => {
     inp.addEventListener('input', (e) => {
       state.draftValues[inp.getAttribute('data-cat-input')] = e.target.value;
+      state.draftDirty = true;
+      state.confirmClearDraft = false;
+      state.draftNegConfirmed = false;
+      state.draftWarning = '';
       let reg = 0, one = 0, cash = 0, fund = 0;
       for (const cat of analytics.categories) {
         const n = Number((state.draftValues[cat.id] || '').trim());
@@ -1379,7 +1512,7 @@ function bindEvents(root, analytics) {
     });
   });
   const noteEl = root.querySelector('#draft-note');
-  if (noteEl) noteEl.addEventListener('input', (e) => { state.draftNote = e.target.value; });
+  if (noteEl) noteEl.addEventListener('input', (e) => { state.draftNote = e.target.value; state.draftDirty = true; });
 
   root.querySelectorAll('[data-pick-color]').forEach((el) => {
     el.addEventListener('click', () => { state.newCatColor = el.getAttribute('data-pick-color'); render(); });
@@ -1389,17 +1522,45 @@ function bindEvents(root, analytics) {
       const id = el.getAttribute('data-del-cat');
       const target = state.store.categories.find((c) => c.id === id);
       if (!target || target.builtIn) return;
+      if (state.confirmDelCatId !== id) {
+        state.confirmDelCatId = id;
+        render();
+        return;
+      }
+      state.confirmDelCatId = null;
       persist({ ...state.store, categories: state.store.categories.filter((c) => c.id !== id) }, `已删除科目「${target.name}」`);
     });
   });
   root.querySelectorAll('[data-overlay]').forEach((el) => {
     el.addEventListener('click', () => {
       const o = el.getAttribute('data-overlay');
-      if (o === 'drawer') state.editingRecordId = null;
-      if (o === 'cat') state.showCatModal = false;
+      if (o === 'drawer') { tryCloseDrawer(); return; }
+      if (o === 'cat') { state.showCatModal = false; state.catFormError = ''; state.confirmDelCatId = null; }
       render();
     });
   });
+
+  // Global Escape / Cmd+S & outside-click menu close (bound once)
+  if (!window.__incomeGlobalUXBound) {
+    window.__incomeGlobalUXBound = true;
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (state.showDataMenu) { state.showDataMenu = false; render(); return; }
+        if (state.showCatModal) { state.showCatModal = false; state.catFormError = ''; state.confirmDelCatId = null; render(); return; }
+        if (state.editingRecordId) { tryCloseDrawer(); return; }
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's' && state.editingRecordId) {
+        e.preventDefault();
+        document.querySelector('[data-action="save-draft"]')?.click();
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (state.showDataMenu && !e.target.closest('.menu-wrap')) {
+        state.showDataMenu = false;
+        render();
+      }
+    });
+  }
 
   const fileInp = root.querySelector('#file-import-input');
   if (fileInp) {

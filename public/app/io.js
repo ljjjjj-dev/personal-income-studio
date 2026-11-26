@@ -3,7 +3,7 @@ import { DEFAULT_CATEGORIES, createSeedData, makeMonthId } from './seed.js';
 const LS_KEY = 'personal_income_studio_v1';
 
 export function migrateStore(json) {
-  if (!json || (json.version || 1) >= 5) {
+  if (!json || (json.version || 1) >= 6) {
     return { data: json, migrated: false };
   }
   const colorById = new Map(DEFAULT_CATEGORIES.map((c) => [c.id, c.color]));
@@ -17,7 +17,7 @@ export function migrateStore(json) {
   return {
     data: {
       ...json,
-      version: 5,
+      version: 6,
       categories,
     },
     migrated: true,

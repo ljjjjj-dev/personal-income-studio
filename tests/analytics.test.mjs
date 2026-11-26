@@ -4,9 +4,9 @@ import { createSeedData, DEFAULT_CATEGORIES } from '../public/app/seed.js';
 import { computeAnalytics } from '../public/app/analytics.js';
 import { migrateStore } from '../public/app/io.js';
 
-test('createSeedData returns valid v5 demo dataset', () => {
+test('createSeedData returns valid v6 demo dataset', () => {
   const seed = createSeedData();
-  assert.equal(seed.version, 5);
+  assert.equal(seed.version, 6);
   assert.equal(seed.categories.length, DEFAULT_CATEGORIES.length);
   assert.ok(seed.records.length >= 73);
 
@@ -37,7 +37,7 @@ test('computeAnalytics maintains exact cash + fund == total and same-period diff
   }
 });
 
-test('migrateStore upgrades older versions to v5 and refreshes built-in colors', () => {
+test('migrateStore upgrades older versions to v6 and refreshes built-in colors', () => {
   const legacy = {
     version: 3,
     categories: DEFAULT_CATEGORIES.map((c) => ({ ...c, color: '#000000' })),
@@ -45,6 +45,6 @@ test('migrateStore upgrades older versions to v5 and refreshes built-in colors',
   };
   const { data, migrated } = migrateStore(legacy);
   assert.equal(migrated, true);
-  assert.equal(data.version, 5);
+  assert.equal(data.version, 6);
   assert.equal(data.categories[0].color, DEFAULT_CATEGORIES[0].color);
 });

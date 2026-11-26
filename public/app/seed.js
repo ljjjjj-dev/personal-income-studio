@@ -1,24 +1,27 @@
-export const ONETIME_GROUP_COLOR = '#FF3B30';
+export const ONETIME_GROUP_COLOR = '#F28482';
+export const PRIMARY_BLUE = '#4A90E2';
+export const CASH_GREEN = '#52C498';
+export const FUND_TEAL = '#4ECDC4';
 
 export const DEFAULT_CATEGORIES = [
-  { id: 'salary', name: '基本工资', group: 'regular', bucket: 'cash', color: '#007AFF', order: 1, builtIn: true },
-  { id: 'duty', name: '岗位津贴', group: 'regular', bucket: 'cash', color: '#5856D6', order: 2, builtIn: true },
-  { id: 'overtime', name: '加班费', group: 'regular', bucket: 'cash', color: '#AF52DE', order: 3, builtIn: true },
-  { id: 'transport', name: '交通补贴', group: 'regular', bucket: 'cash', color: '#32ADE6', order: 4, builtIn: true },
-  { id: 'housing', name: '住房补贴', group: 'regular', bucket: 'cash', color: '#FF9500', order: 5, builtIn: true },
-  { id: 'performance', name: '绩效奖金', group: 'regular', bucket: 'cash', color: '#34C759', order: 6, builtIn: true },
-  { id: 'fund', name: '公积金', group: 'regular', bucket: 'fund', color: '#00C7BE', order: 7, builtIn: true },
-  { id: 'allowance', name: '专项津贴', group: 'regular', bucket: 'cash', color: '#FFCC00', order: 8, builtIn: true },
-  { id: 'bonus_eval', name: '年度考核奖', group: 'onetime', bucket: 'cash', color: '#FF3B30', order: 9, builtIn: true },
-  { id: 'bonus_once', name: '项目激励奖', group: 'onetime', bucket: 'cash', color: '#FF2D55', order: 10, builtIn: true },
-  { id: 'leave_pay', name: '未休假补贴', group: 'onetime', bucket: 'cash', color: '#A2845E', order: 11, builtIn: true },
-  { id: 'salary_adj', name: '调薪补发', group: 'onetime', bucket: 'cash', color: '#30B0C7', order: 12, builtIn: true },
-  { id: 'fund_interest', name: '公积金结息', group: 'onetime', bucket: 'fund', color: '#5AC8FA', order: 13, builtIn: true },
+  { id: 'salary', name: '基本工资', group: 'regular', bucket: 'cash', color: '#4A90E2', order: 1, builtIn: true },
+  { id: 'duty', name: '岗位津贴', group: 'regular', bucket: 'cash', color: '#8086E8', order: 2, builtIn: true },
+  { id: 'overtime', name: '加班费', group: 'regular', bucket: 'cash', color: '#B18CEB', order: 3, builtIn: true },
+  { id: 'transport', name: '交通补贴', group: 'regular', bucket: 'cash', color: '#56C2E6', order: 4, builtIn: true },
+  { id: 'housing', name: '住房补贴', group: 'regular', bucket: 'cash', color: '#F6B26B', order: 5, builtIn: true },
+  { id: 'performance', name: '绩效奖金', group: 'regular', bucket: 'cash', color: '#52C498', order: 6, builtIn: true },
+  { id: 'fund', name: '公积金', group: 'regular', bucket: 'fund', color: '#4ECDC4', order: 7, builtIn: true },
+  { id: 'allowance', name: '专项津贴', group: 'regular', bucket: 'cash', color: '#F3D060', order: 8, builtIn: true },
+  { id: 'bonus_eval', name: '年度考核奖', group: 'onetime', bucket: 'cash', color: '#F28482', order: 9, builtIn: true },
+  { id: 'bonus_once', name: '项目激励奖', group: 'onetime', bucket: 'cash', color: '#F08AB4', order: 10, builtIn: true },
+  { id: 'leave_pay', name: '未休假补贴', group: 'onetime', bucket: 'cash', color: '#C9A984', order: 11, builtIn: true },
+  { id: 'salary_adj', name: '调薪补发', group: 'onetime', bucket: 'cash', color: '#63B8C8', order: 12, builtIn: true },
+  { id: 'fund_interest', name: '公积金结息', group: 'onetime', bucket: 'fund', color: '#7DD3FC', order: 13, builtIn: true },
 ];
 
 export const APPLE_PALETTE = [
-  '#007AFF', '#34C759', '#FF9500', '#AF52DE', '#00C7BE', '#FF2D55',
-  '#5856D6', '#FF3B30', '#32ADE6', '#30B0C7', '#A2845E', '#FFCC00',
+  '#4A90E2', '#52C498', '#F6B26B', '#B18CEB', '#4ECDC4', '#F08AB4',
+  '#8086E8', '#F28482', '#56C2E6', '#63B8C8', '#C9A984', '#F3D060',
 ];
 
 export function makeMonthId(year, month) {
@@ -66,7 +69,7 @@ export function createSeedData() {
     }
   }
   return {
-    version: 5,
+    version: 6,
     updatedAt: new Date().toISOString(),
     categories: DEFAULT_CATEGORIES,
     records,
