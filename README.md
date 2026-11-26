@@ -5,7 +5,7 @@
 <h1 align="center">personal-income-studio</h1>
 
 <p align="center">
-  极简美学风格的本地个人收入分析工作台，零第三方依赖，纯本地隐私存储。<br>
+  极简美学风格的本地个人收入分析工作台，不依赖第三方，纯本地隐私存储。<br>
   开箱即用的 <strong>12 组交互式 SVG 图表</strong>、跨年公平同期对比、年度目标预测、隐私一键打码与多工作表 Excel / JSON / CSV 导入导出。
 </p>
 
